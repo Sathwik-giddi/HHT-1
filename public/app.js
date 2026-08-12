@@ -1152,12 +1152,7 @@ shareNativeBtn.addEventListener('click', async () => {
 });
 
 function shareText() {
-  const name = nameIn.value.trim();
-  const card = state.mode === 'card';
-  const first = card
-    ? 'Just minted my HH Goa 2026 builder ID' + (name ? ' for ' + name : '') + '. See you on the beach, hackers \uD83C\uDFD6\uFE0F'
-    : 'New X pfp loading — HH Goa 2026 \uD83C\uDFD6\uFE0F';
-  return first + '\n\n#FrameInGoa #HackerHouse #Goa2026';
+  return 'A small build, but a fun one\n\n#FrameInGoa #HackerHouse #Goa2026\n\n@247pmstudio';
 }
 
 shareBtn.addEventListener('click', async () => {
