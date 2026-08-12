@@ -9,9 +9,18 @@ const crypto = require('crypto');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-/* writable dir: /tmp on Vercel/Lambda (project dir is read-only), ./data/images locally */
+/* writable dir: /tmp on Vercel/Lambda (project dir is read-only), ./data/images locally.
+   On Vercel /tmp is ephemeral per-instance, so when a Blob store is configured we
+   persist images there instead (see storeImage / serveSharePage). */
 const DATA_DIR = path.join(process.env.RENDER_DISK_PATH || os.tmpdir(), 'hh-goa-images');
 fs.mkdirSync(DATA_DIR, { recursive: true });
+
+const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN;
+function blobStoreHost() {
+  if (!BLOB_TOKEN) return null;
+  const m = /^vercel_blob_rw_([0-9a-f]+)_/.exec(BLOB_TOKEN);
+  return m ? `https://${m[1]}.public.blob.vercel-storage.com` : null;
+}
 
 app.disable('x-powered-by');
 app.use(express.json({ limit: '12mb' }));
@@ -34,21 +43,35 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-function storeImage(dataUrl, meta = {}) {
+const { put } = require('@vercel/blob');
+
+async function storeImage(dataUrl, meta = {}) {
   const m = /^data:image\/(png|jpeg);base64,(.+)$/.exec(dataUrl || '');
   if (!m) throw new Error('bad_image');
   const ext = m[1] === 'jpeg' ? 'jpg' : 'png';
   const id = shortId();
+  const buf = Buffer.from(m[2], 'base64');
+
+  if (BLOB_TOKEN && blobStoreHost()) {
+    await put(`s/${id}.${ext}`, buf, {
+      access: 'public',
+      addRandomSuffix: false,
+      token: BLOB_TOKEN,
+      contentType: ext === 'png' ? 'image/png' : 'image/jpeg',
+    });
+    return { id, ext, blob: true };
+  }
+
   const base = path.join(DATA_DIR, id);
-  fs.writeFileSync(base + '.' + ext, Buffer.from(m[2], 'base64'));
+  fs.writeFileSync(base + '.' + ext, buf);
   fs.writeFileSync(base + '.json', JSON.stringify({ ext, createdAt: Date.now(), ...meta }));
-  return { id, ext };
+  return { id, ext, blob: false };
 }
 
-app.post('/api/image', (req, res) => {
+app.post('/api/image', async (req, res) => {
   try {
     const { dataUrl, meta } = req.body || {};
-    const { id, ext } = storeImage(dataUrl, meta);
+    const { id, ext } = await storeImage(dataUrl, meta);
     const url = `/s/${id}`;
     res.json({ id, ext, url });
   } catch (e) {
@@ -64,6 +87,7 @@ app.get('/api/health', (req, res) => {
 app.get('/api/image/:id', (req, res) => {
   const { id } = req.params;
   if (!ID_HEX.test(id) && !ID_SHORT.test(id)) return res.status(404).json({ error: 'not found' });
+  if (BLOB_TOKEN) return res.json({ id, ext: 'png', meta: {} });
   const base = path.join(DATA_DIR, id);
   if (!fs.existsSync(base + '.png') && !fs.existsSync(base + '.jpg')) {
     return res.status(404).json({ error: 'not found' });
@@ -74,6 +98,12 @@ app.get('/api/image/:id', (req, res) => {
 });
 
 function serveImageFile(req, res) {
+  if (BLOB_TOKEN) {
+    const host = blobStoreHost();
+    const url = `${host}/s/${req.params[0]}.${req.params[2]}`;
+    res.set('Cache-Control', 'public, max-age=31536000, immutable');
+    return res.redirect(302, url);
+  }
   const file = path.join(DATA_DIR, req.params[0] + '.' + req.params[2]);
   if (!fs.existsSync(file)) return res.status(404).send('not found');
   res.set('Cache-Control', 'public, max-age=31536000, immutable');
@@ -82,20 +112,29 @@ function serveImageFile(req, res) {
 
 function serveSharePage(req, res) {
   const id = req.params[0];
-  const base = path.join(DATA_DIR, id);
-  const ext = fs.existsSync(base + '.png') ? 'png' : fs.existsSync(base + '.jpg') ? 'jpg' : null;
-  if (!ext) return res.status(404).send('not found');
-
-  let meta = {};
-  try { meta = JSON.parse(fs.readFileSync(base + '.json', 'utf8')); } catch (e) {}
-  meta = meta || {};
-
+  const prefix = req.path.indexOf('/s/') === 0 ? '/s' : '/i';
   const host = req.get('host') || 'localhost:3001';
   const proto = req.headers['x-forwarded-proto'] || req.protocol;
   const origin = `${proto}://${host}`;
-  const prefix = req.path.indexOf('/s/') === 0 ? '/s' : '/i';
-  const imgUrl = `${origin}${prefix}/${id}.${ext}`;
   const pageUrl = `${origin}${prefix}/${id}`;
+
+  let ext = null;
+  let meta = {};
+  let imgUrl = null;
+
+  if (BLOB_TOKEN) {
+    /* image lives in Blob — the store host is derived from the token */
+    const blobHost = blobStoreHost();
+    ext = 'png';
+    imgUrl = `${blobHost}/s/${id}.${ext}`;
+  } else {
+    const base = path.join(DATA_DIR, id);
+    ext = fs.existsSync(base + '.png') ? 'png' : fs.existsSync(base + '.jpg') ? 'jpg' : null;
+    if (!ext) return res.status(404).send('not found');
+    try { meta = JSON.parse(fs.readFileSync(base + '.json', 'utf8')); } catch (e) {}
+    meta = meta || {};
+    imgUrl = `${origin}${prefix}/${id}.${ext}`;
+  }
 
   const name = meta.name ? ` for ${escapeHtml(meta.name)}` : '';
   const title = meta.title ? ` · ${escapeHtml(meta.title)}` : '';
