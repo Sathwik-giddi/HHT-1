@@ -1210,14 +1210,27 @@ shareBtn.addEventListener('click', async () => {
       }
     }
 
-    /* 2) X composer with the unique URL — the image shows as a card once posted */
+    /* 2) desktop: copy the image to the clipboard, then open the X composer with caption + link */
+    let copied = false;
+    try {
+      if (navigator.clipboard && window.ClipboardItem) {
+        await navigator.clipboard.write([new ClipboardItem({ [file.type]: file })]);
+        copied = true;
+      }
+    } catch (e) { /* clipboard unavailable/blocked */ }
+
     const intent = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(text);
     window.open(intent, '_blank', 'noopener');
-    shareCap.innerHTML = isLocal
-      ? 'X can\u2019t preview localhost links — the card appears once this is deployed. Your link is in the tweet text: <b>' + link + '</b>'
-      : (link
-          ? 'opening X… your unique link is attached (<b>' + link.replace(/^https?:\/\//, '') + '</b>) — the image card shows on the posted tweet.'
-          : 'could not host the image — sharing with caption only. <b>#FrameInGoa</b>');
+    if (copied) {
+      shareCap.innerHTML = 'X is opening — press <b>Ctrl/⌘+V</b> in the post box to paste your image. Caption and link are already filled in.'
+        + (isLocal ? ' (X can\u2019t show the link card while on localhost.)' : '');
+    } else {
+      shareCap.innerHTML = isLocal
+        ? 'X can\u2019t preview localhost links — the card appears once this is deployed. Your link is in the tweet text: <b>' + link + '</b>'
+        : (link
+            ? 'opening X… your unique link is attached (<b>' + link.replace(/^https?:\/\//, '') + '</b>) — the image card shows on the posted tweet.'
+            : 'could not host the image — sharing with caption only. <b>#FrameInGoa</b>');
+    }
   } catch (e) {
     console.error(e);
     shareCap.innerHTML = 'something went wrong — try downloading instead.';
