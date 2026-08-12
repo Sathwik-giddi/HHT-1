@@ -19,7 +19,16 @@ app.use(express.json({ limit: '12mb' }));
 app.use('/vendor', express.static(path.join(__dirname, 'node_modules', 'heic2any', 'dist')));
 app.use(express.static(path.join(__dirname, 'public')));
 
-const ID_RE = /^[0-9a-f]{16}$/;
+const ID_HEX = /^[0-9a-f]{16}$/;
+const ID_SHORT = /^[0-9a-z]{12}$/;
+
+function shortId(len = 12) {
+  const chars = '0123456789abcdefghijklmnopqrstuvwxyz';
+  const buf = crypto.randomBytes(len);
+  let s = '';
+  for (let i = 0; i < len; i++) s += chars[buf[i] % chars.length];
+  return s;
+}
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -29,7 +38,7 @@ function storeImage(dataUrl, meta = {}) {
   const m = /^data:image\/(png|jpeg);base64,(.+)$/.exec(dataUrl || '');
   if (!m) throw new Error('bad_image');
   const ext = m[1] === 'jpeg' ? 'jpg' : 'png';
-  const id = crypto.randomBytes(8).toString('hex');
+  const id = shortId();
   const base = path.join(DATA_DIR, id);
   fs.writeFileSync(base + '.' + ext, Buffer.from(m[2], 'base64'));
   fs.writeFileSync(base + '.json', JSON.stringify({ ext, createdAt: Date.now(), ...meta }));
@@ -40,7 +49,7 @@ app.post('/api/image', (req, res) => {
   try {
     const { dataUrl, meta } = req.body || {};
     const { id, ext } = storeImage(dataUrl, meta);
-    const url = `/i/${id}`;
+    const url = `/s/${id}`;
     res.json({ id, ext, url });
   } catch (e) {
     console.error('image upload failed:', e.message);
@@ -54,7 +63,7 @@ app.get('/api/health', (req, res) => {
 
 app.get('/api/image/:id', (req, res) => {
   const { id } = req.params;
-  if (!ID_RE.test(id)) return res.status(404).json({ error: 'not found' });
+  if (!ID_HEX.test(id) && !ID_SHORT.test(id)) return res.status(404).json({ error: 'not found' });
   const base = path.join(DATA_DIR, id);
   if (!fs.existsSync(base + '.png') && !fs.existsSync(base + '.jpg')) {
     return res.status(404).json({ error: 'not found' });
@@ -64,14 +73,14 @@ app.get('/api/image/:id', (req, res) => {
   res.json({ id, ext: meta.ext || 'png', meta });
 });
 
-app.get(/^\/i\/([0-9a-f]{16})\.(png|jpg)$/, (req, res) => {
-  const file = path.join(DATA_DIR, req.params[0] + '.' + req.params[1]);
+function serveImageFile(req, res) {
+  const file = path.join(DATA_DIR, req.params[0] + '.' + req.params[2]);
   if (!fs.existsSync(file)) return res.status(404).send('not found');
   res.set('Cache-Control', 'public, max-age=31536000, immutable');
   res.sendFile(file);
-});
+}
 
-app.get(/^\/i\/([0-9a-f]{16})$/, (req, res) => {
+function serveSharePage(req, res) {
   const id = req.params[0];
   const base = path.join(DATA_DIR, id);
   const ext = fs.existsSync(base + '.png') ? 'png' : fs.existsSync(base + '.jpg') ? 'jpg' : null;
@@ -84,7 +93,9 @@ app.get(/^\/i\/([0-9a-f]{16})$/, (req, res) => {
   const host = req.get('host') || 'localhost:3001';
   const proto = req.headers['x-forwarded-proto'] || req.protocol;
   const origin = `${proto}://${host}`;
-  const imgUrl = `${origin}/i/${id}.${ext}`;
+  const prefix = req.path.indexOf('/s/') === 0 ? '/s' : '/i';
+  const imgUrl = `${origin}${prefix}/${id}.${ext}`;
+  const pageUrl = `${origin}${prefix}/${id}`;
 
   const name = meta.name ? ` for ${escapeHtml(meta.name)}` : '';
   const title = meta.title ? ` · ${escapeHtml(meta.title)}` : '';
@@ -104,7 +115,7 @@ app.get(/^\/i\/([0-9a-f]{16})$/, (req, res) => {
 <meta property="og:image" content="${imgUrl}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:url" content="${origin}/i/${id}">
+<meta property="og:url" content="${pageUrl}">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${ogTitle}">
 <meta name="twitter:description" content="${ogDesc}">
@@ -148,6 +159,16 @@ app.get(/^\/i\/([0-9a-f]{16})$/, (req, res) => {
 </script>
 </body>
 </html>`);
+}
+
+/* short links (new) + legacy 16-hex ids */
+app.get(/^\/(?:s\/([0-9a-z]{12})|i\/([0-9a-f]{16}))\.(png|jpg)$/, (req, res) => {
+  req.params[0] = req.params[0] || req.params[1];
+  serveImageFile(req, res);
+});
+app.get(/^\/(?:s\/([0-9a-z]{12})|i\/([0-9a-f]{16}))$/, (req, res) => {
+  req.params[0] = req.params[0] || req.params[1];
+  serveSharePage(req, res);
 });
 
 app.use((req, res) => {
