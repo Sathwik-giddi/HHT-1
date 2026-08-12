@@ -97,6 +97,9 @@ const BASE  = ['DEPLOY OFFICER','API ALCHEMIST','BUG SQUASHER','HACK WRANGLER','
 
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 
+/* public site the share links point at (not the current browsing origin) */
+const SITE_URL = 'https://hhg-omega.vercel.app';
+
 function genTitle(stack) {
   const core = (stack || '').trim().split(/[^a-zA-Z]/).filter(Boolean)[0];
   return core ? core.toUpperCase() + ' ' + pick(NOUNS) : pick(BASE);
@@ -1170,7 +1173,6 @@ shareBtn.addEventListener('click', async () => {
       title: state.title || '',
       mode: state.mode,
     };
-    const isLocal = ['localhost', '127.0.0.1', ''].includes(location.hostname);
     const isMobile = /Mobi|Android/i.test(navigator.userAgent) || (navigator.userAgentData && navigator.userAgentData.mobile);
     let link = '';
     try {
@@ -1187,7 +1189,7 @@ shareBtn.addEventListener('click', async () => {
       });
       if (r.ok) {
         const j = await r.json();
-        link = new URL(j.url, location.origin).href;
+        link = new URL(j.url, SITE_URL).href;
       } else {
         console.warn('image upload failed', r.status);
       }
@@ -1225,14 +1227,11 @@ shareBtn.addEventListener('click', async () => {
     else window.open(intent, '_blank', 'noopener');
 
     if (copied) {
-      shareCap.innerHTML = 'X is opening — caption and link are auto-filled. Press <b>Ctrl/⌘+V</b> in the post box to paste your image, then hit Post.'
-        + (isLocal ? ' (X can\u2019t show the link card while on localhost.)' : '');
+      shareCap.innerHTML = 'X is opening — caption and link are auto-filled. Press <b>Ctrl/⌘+V</b> in the post box to paste your image, then hit Post.';
     } else {
-      shareCap.innerHTML = isLocal
-        ? 'X is opening — caption auto-filled. X can\u2019t preview localhost links; your image link is in the tweet text: <b>' + link + '</b>'
-        : (link
-            ? 'X is opening — caption and your unique link are auto-filled. The image card shows once you Post.'
-            : 'X is opening — caption auto-filled. <b>#FrameInGoa</b>');
+      shareCap.innerHTML = link
+        ? 'X is opening — caption and your unique link are auto-filled. The image card shows once you Post.'
+        : 'X is opening — caption auto-filled. <b>#FrameInGoa</b>';
     }
   } catch (e) {
     console.error(e);
