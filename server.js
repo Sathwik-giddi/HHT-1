@@ -176,6 +176,10 @@ app.use((req, res) => {
   res.status(404).sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`HH Goa 2026 Frame/ID generator → http://localhost:${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`HH Goa 2026 Frame/ID generator → http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
