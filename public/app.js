@@ -1164,6 +1164,10 @@ shareBtn.addEventListener('click', async () => {
   shareBtn.disabled = true;
   shareCap.hidden = false;
   shareCap.innerHTML = 'preparing your graphic…';
+
+  /* reserve the X tab synchronously so popup blockers can't kill the redirect */
+  const reserved = window.open('', '_blank');
+
   try {
     const blob = await canvasToBlob();
     const meta = {
@@ -1172,6 +1176,7 @@ shareBtn.addEventListener('click', async () => {
       mode: state.mode,
     };
     const isLocal = ['localhost', '127.0.0.1', ''].includes(location.hostname);
+    const isMobile = /Mobi|Android/i.test(navigator.userAgent) || (navigator.userAgentData && navigator.userAgentData.mobile);
     let link = '';
     try {
       const dataUrl = await new Promise((res, rej) => {
@@ -1198,19 +1203,20 @@ shareBtn.addEventListener('click', async () => {
     const text = shareText() + (link ? '\n\n' + link : '');
     const file = new File([blob], 'hh-goa-2026.png', { type: 'image/png' });
 
-    /* 1) attach the actual image when the platform supports file sharing (X picks it up) */
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    /* mobile: hand the image straight to the X app via the share sheet */
+    if (isMobile && navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
+        if (reserved) reserved.close();
         await navigator.share({ files: [file], text });
-        shareCap.innerHTML = 'share sheet opened — your image and caption are ready to post.';
+        shareCap.innerHTML = 'X opened — your image, caption and link are in the post. Just hit Post.';
         return;
       } catch (e) {
         if (e && e.name === 'AbortError') { shareCap.innerHTML = 'share cancelled — nothing was posted.'; return; }
-        /* share sheet unusable — fall back to the X composer */
+        /* fall through to desktop flow */
       }
     }
 
-    /* 2) desktop: copy the image to the clipboard, then open the X composer with caption + link */
+    /* desktop: copy the image so ⌘V attaches it, then open the X composer with caption + link */
     let copied = false;
     try {
       if (navigator.clipboard && window.ClipboardItem) {
@@ -1220,19 +1226,22 @@ shareBtn.addEventListener('click', async () => {
     } catch (e) { /* clipboard unavailable/blocked */ }
 
     const intent = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(text);
-    window.open(intent, '_blank', 'noopener');
+    if (reserved) reserved.location.href = intent;
+    else window.open(intent, '_blank', 'noopener');
+
     if (copied) {
-      shareCap.innerHTML = 'X is opening — press <b>Ctrl/⌘+V</b> in the post box to paste your image. Caption and link are already filled in.'
+      shareCap.innerHTML = 'X is opening — caption and link are auto-filled. Press <b>Ctrl/⌘+V</b> in the post box to paste your image, then hit Post.'
         + (isLocal ? ' (X can\u2019t show the link card while on localhost.)' : '');
     } else {
       shareCap.innerHTML = isLocal
-        ? 'X can\u2019t preview localhost links — the card appears once this is deployed. Your link is in the tweet text: <b>' + link + '</b>'
+        ? 'X is opening — caption auto-filled. X can\u2019t preview localhost links; your image link is in the tweet text: <b>' + link + '</b>'
         : (link
-            ? 'opening X… your unique link is attached (<b>' + link.replace(/^https?:\/\//, '') + '</b>) — the image card shows on the posted tweet.'
-            : 'could not host the image — sharing with caption only. <b>#FrameInGoa</b>');
+            ? 'X is opening — caption and your unique link are auto-filled. The image card shows once you Post.'
+            : 'X is opening — caption auto-filled. <b>#FrameInGoa</b>');
     }
   } catch (e) {
     console.error(e);
+    if (reserved) reserved.close();
     shareCap.innerHTML = 'something went wrong — try downloading instead.';
   } finally {
     shareBtn.disabled = false;
