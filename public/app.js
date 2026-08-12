@@ -1166,12 +1166,6 @@ shareBtn.addEventListener('click', async () => {
   shareCap.innerHTML = 'preparing your graphic…';
   try {
     const blob = await canvasToBlob();
-    const dataUrl = await new Promise((res, rej) => {
-      const fr = new FileReader();
-      fr.onload = () => res(fr.result);
-      fr.onerror = rej;
-      fr.readAsDataURL(blob);
-    });
     const meta = {
       name: nameIn.value.trim() || '',
       title: state.title || '',
@@ -1180,6 +1174,12 @@ shareBtn.addEventListener('click', async () => {
     const isLocal = ['localhost', '127.0.0.1', ''].includes(location.hostname);
     let link = '';
     try {
+      const dataUrl = await new Promise((res, rej) => {
+        const fr = new FileReader();
+        fr.onload = () => res(fr.result);
+        fr.onerror = rej;
+        fr.readAsDataURL(blob);
+      });
       const r = await fetch('/api/image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1188,18 +1188,35 @@ shareBtn.addEventListener('click', async () => {
       if (r.ok) {
         const j = await r.json();
         link = new URL(j.url, location.origin).href;
+      } else {
+        console.warn('image upload failed', r.status);
       }
-    } catch (e) { /* offline — fall back to text-only tweet */ }
+    } catch (e) {
+      console.warn('image upload failed', e);
+    }
 
-    const text = encodeURIComponent(shareText());
-    let intent = 'https://twitter.com/intent/tweet?text=' + text;
-    if (link && !isLocal) intent += '&url=' + encodeURIComponent(link);
+    const text = shareText() + (link ? '\n\n' + link : '');
+    const file = new File([blob], 'hh-goa-2026.png', { type: 'image/png' });
+
+    /* 1) attach the actual image when the platform supports file sharing (X picks it up) */
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], text });
+        shareCap.innerHTML = 'share sheet opened — your image and caption are ready to post.';
+        return;
+      } catch (e) {
+        if (e && e.name === 'AbortError') { shareCap.innerHTML = 'share cancelled — nothing was posted.'; return; }
+        /* share sheet unusable — fall back to the X composer */
+      }
+    }
+
+    /* 2) X composer with the unique URL — the image shows as a card once posted */
+    const intent = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(text);
     window.open(intent, '_blank', 'noopener');
-
     shareCap.innerHTML = isLocal
-      ? 'X can\u2019t preview localhost links. Deploy to a public host and the image card shows in the tweet. <b>#FrameInGoa</b>'
+      ? 'X can\u2019t preview localhost links — the card appears once this is deployed. Your link is in the tweet text: <b>' + link + '</b>'
       : (link
-          ? 'opening X… image link attached so the preview shows your graphic.'
+          ? 'opening X… your unique link is attached (<b>' + link.replace(/^https?:\/\//, '') + '</b>) — the image card shows on the posted tweet.'
           : 'could not host the image — sharing with caption only. <b>#FrameInGoa</b>');
   } catch (e) {
     console.error(e);

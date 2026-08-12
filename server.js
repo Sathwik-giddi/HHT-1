@@ -3,12 +3,14 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-const DATA_DIR = path.join(__dirname, 'data', 'images');
+/* writable dir: /tmp on Vercel/Lambda (project dir is read-only), ./data/images locally */
+const DATA_DIR = path.join(process.env.RENDER_DISK_PATH || os.tmpdir(), 'hh-goa-images');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
 app.disable('x-powered-by');
@@ -41,6 +43,7 @@ app.post('/api/image', (req, res) => {
     const url = `/i/${id}`;
     res.json({ id, ext, url });
   } catch (e) {
+    console.error('image upload failed:', e.message);
     res.status(400).json({ error: 'invalid image payload' });
   }
 });
