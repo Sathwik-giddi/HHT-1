@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HH Goa 2026 — Frame / ID Generator</title>
+<meta name="description" content="Upload a photo and instantly get a branded HH Goa 2026 ID card or PFP frame. Download and share to X with #FrameInGoa.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230E3B2E'/%3E%3Ccircle cx='16' cy='16' r='7' fill='%23FFE600'/%3E%3Ccircle cx='16' cy='16' r='3.5' fill='%230E3B2E'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Anton&family=Mukta:wght@600;700;800&family=Space+Mono:wght@400;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Mukta:wght@600;700;800&family=Space+Mono:wght@400;700&display=swap"></noscript>
+<link rel="stylesheet" href="styles.css?v=4">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">
+    <span class="brand-word">HACKER&nbsp;HOUSE</span>
+    <span class="brand-goa">गोवा</span>
+  </a>
+  <span class="brand-tag">FRAME / ID GENERATOR · 2026</span>
+</header>
+
+<main class="wrap">
+  <div class="workspace">
+    <div class="controls">
+      <nav class="mode-toggle" id="modeToggle">
+        <button class="mode-btn" data-mode="card" aria-pressed="true">
+          <b>ID CARD</b><span>name · stack · title</span>
+        </button>
+        <button class="mode-btn" data-mode="pfp" aria-pressed="false">
+          <b>PFP FRAME</b><span>square X profile pic</span>
+        </button>
+      </nav>
+
+      <section class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload your photo">
+        <input type="file" id="fileInput" accept="image/*" hidden>
+        <div class="dz-inner" id="dzInner">
+          <svg class="dz-sun" viewBox="0 0 48 48" width="52" height="52" aria-hidden="true">
+            <g fill="#FFE600">
+              <path d="M24 2v7M24 39v7M2 24h7M39 24h7M8.5 8.5l5 5M34.5 34.5l5 5M39.5 8.5l-5 5M13.5 34.5l-5 5"/>
+              <circle cx="24" cy="24" r="11"/>
+            </g>
+            <circle cx="24" cy="24" r="6" fill="#0E3B2E"/>
+          </svg>
+          <p class="dz-title">TAP TO ADD YOUR SELFIE / PHOTO</p>
+          <p class="dz-sub">JPG · PNG · HEIC from iPhone — any crop, any orientation</p>
+        </div>
+      </section>
+
+      <button class="btn btn-ghost btn-change" id="changeBtn" type="button" hidden>↻ CHANGE PHOTO</button>
+
+      <section class="panel" id="fieldsPanel" hidden>
+        <div class="field">
+          <label for="nameInput">NAME</label>
+          <input id="nameInput" type="text" maxlength="28" placeholder="e.g. Priya Sharma" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="stackInput">STACK / ROLE</label>
+          <input id="stackInput" type="text" maxlength="24" placeholder="e.g. Backend · AI · Design" autocomplete="off">
+          <div class="chips" id="stackChips"></div>
+        </div>
+        <div class="field row">
+          <div class="grow">
+            <label for="titleInput">BUILDER TITLE</label>
+            <input id="titleInput" type="text" maxlength="30" placeholder="auto-generated for you">
+          </div>
+          <button class="reroll" id="rerollBtn" type="button" title="Generate a new title" aria-label="Generate a new title">↻</button>
+        </div>
+      </section>
+
+      <section class="actions" id="actions" hidden>
+        <div class="actions-row">
+          <button class="btn btn-ghost" id="shareNativeBtn" type="button" hidden>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M18.9 1.2l3.9 12.4H14.5zM5.1 13.6h8.3v8.3l-3.9-3.9-6.1 6.1-3.9-3.9 6.1-6.1z"/></svg>
+            SHARE IMAGE
+          </button>
+          <button class="btn btn-ghost" id="shareBtn" type="button">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+            SHARE TO X
+          </button>
+        </div>
+        <p class="share-cap" id="shareCap" hidden></p>
+      </section>
+    </div>
+
+    <section class="panel preview-panel" id="previewPanel" hidden>
+      <p class="preview-label">LIVE PREVIEW</p>
+      <div class="canvas-holder" id="canvasHolder">
+        <canvas id="out"></canvas>
+        <div class="field-selection" id="fieldSel" hidden><span class="fs-tag" id="fieldSelTag"></span></div>
+      </div>
+      <div class="photo-tools" id="photoTools">
+        <div class="tool-row">
+          <div class="tool-group">
+            <button class="ctrl" id="zoomOutBtn" type="button" title="Zoom out" aria-label="Zoom out">−</button>
+            <button class="ctrl ctrl-main" id="recenterBtn" type="button" title="Re-center photo" aria-label="Re-center photo">⟲</button>
+            <button class="ctrl" id="zoomInBtn" type="button" title="Zoom in" aria-label="Zoom in">+</button>
+            <span class="zoom-badge" id="zoomBadge" hidden>100%</span>
+          </div>
+          <div class="tool-group">
+            <button class="btn btn-ghost btn-sm" id="resetLayoutBtn" type="button" title="Move text back to the default layout">↺ RESET LAYOUT</button>
+            <button class="btn btn-yellow btn-dl" id="downloadBtn" type="button">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 19h16"/></svg>
+              DOWNLOAD PNG
+            </button>
+          </div>
+        </div>
+        <p class="pan-hint">drag photo to reposition · click &amp; drag NAME / STACK / TITLE text to reposition it · scroll to zoom</p>
+      </div>
+    </section>
+  </div>
+
+  <footer class="foot">#FrameInGoa · HH GOA 2026 · GOA, INDIA</footer>
+</main>
+
+<script src="/vendor/heic2any.min.js"></script>
+<script src="app.js?v=4"></script>
+</body>
+</html>

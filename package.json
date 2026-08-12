@@ -1,0 +1,21 @@
+{
+  "name": "hh-goa-2026-frame-id",
+  "version": "1.0.0",
+  "description": "HH Goa 2026 — Frame / ID card generator. Upload a photo, get a branded graphic, download & share to X.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "heic2any": "^0.0.4"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^23.0.0"
+  }
+}
+}
